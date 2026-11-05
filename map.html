@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>绕路 Detour · 路线图</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root{ --ink:#12141a; --ink2:#5b6069; --ink3:#8a8f98; --line:#e7e6e2; --red:#e8553d; --bg:#f7f6f3; --card:#fff; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font:14px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased; }
+  #app{ display:flex; height:100%; }
+
+  .side{ flex:0 0 340px; height:100%; overflow:auto; background:var(--card);
+         border-right:1px solid var(--line); padding:18px 18px 28px; }
+  .kicker{ font-size:12px; color:var(--ink3); letter-spacing:.1em; margin-bottom:8px; }
+  .kicker b{ color:var(--red); font-weight:700; letter-spacing:.06em; }
+  h1{ font-size:21px; line-height:1.3; margin:0 0 6px; letter-spacing:-.01em;
+      display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+      overflow:hidden; word-break:break-word; }
+  .sub{ font-size:12.5px; color:var(--ink2); padding-bottom:12px; border-bottom:1px solid var(--line); }
+
+  .totals{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; padding:14px 0 8px;
+           border-bottom:1px solid var(--line); margin-bottom:6px; }
+  .totals div{ font-size:11px; color:var(--ink3); }
+  .totals b{ display:block; font-size:16px; color:var(--ink); font-weight:650; letter-spacing:-.01em; }
+
+  .leg{ position:relative; margin:0 0 2px; padding:0 0 0 22px; }
+  .leg:before{ content:""; position:absolute; left:5px; top:16px; bottom:-6px; width:2px;
+    background:repeating-linear-gradient(to bottom,#f0b4a9 0 4px,transparent 4px 8px); }
+  .leg .ln{ font-size:12.5px; color:var(--ink2); padding:2px 0 10px; line-height:1.6; }
+  .leg .ln b{ color:var(--ink); font-weight:600; }
+  .leg .ln em{ font-style:normal; color:var(--ink3); }
+
+  .stop{ position:relative; padding:2px 0 12px 22px; }
+  .stop .idx{ position:absolute; left:0; top:2px; width:13px; height:13px; border-radius:50%;
+    background:var(--ink); color:#fff; font-size:9.5px; line-height:13px; text-align:center; }
+  .stop h3{ font-size:14px; margin:0 0 4px; font-weight:650; letter-spacing:-.01em;
+            display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+            overflow:hidden; }
+  .row2{ font-size:12px; color:var(--ink2); margin:1px 0; }
+  .row2 span{ color:var(--ink3); }
+
+  .hotels{ border-top:1px solid var(--line); margin-top:8px; padding-top:12px; }
+  .hotels h4{ font-size:12px; margin:0 0 6px; color:var(--ink3); font-weight:600; }
+  .hotels a{ display:block; color:var(--ink); text-decoration:none; font-size:12.5px; padding:3px 0; }
+  .hotels a:hover{ text-decoration:underline; }
+  .hotels em{ font-style:normal; color:var(--ink3); }
+  .hint{ font-size:11.5px; color:var(--ink3); border-top:1px solid var(--line); margin-top:14px; padding-top:10px; }
+
+  .mapwrap{ flex:1 1 auto; position:relative; min-width:0; }
+  #map{ position:absolute; inset:0; background:#f2f0ea; }
+  .legend{ position:absolute; right:14px; top:14px; z-index:600; background:rgba(255,255,255,.95);
+    border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:11.5px;
+    color:var(--ink2); box-shadow:0 2px 10px rgba(20,22,28,.06); }
+  .legend i{ display:inline-block; width:18px; height:0; margin-right:6px;
+    vertical-align:middle; border-top:3px solid var(--red); }
+  .leaflet-container{ font:12px/1.4 -apple-system,"PingFang SC",sans-serif; }
+  .stop-label{
+    background:#fff;border:1px solid #dfe2e7;border-radius:6px;
+    box-shadow:0 1px 3px rgba(0,0,0,.16);
+    padding:2px 7px;font-size:12px;line-height:17px;color:#1b1d22;
+    font-weight:600;white-space:nowrap;
+  }
+  .stop-label::before{ display:none !important; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside class="side">
+    <div class="kicker"><b>绕路</b> DETOUR</div>
+    <h1 id="title">路线</h1>
+    <div class="sub" id="sub">一条走完的街区路线</div>
+    <div class="totals">
+      <div>总时长<b id="tMin">–</b></div>
+      <div>总步行<b id="tWalk">–</b></div>
+      <div>站点<b id="tStops">–</b></div>
+      <div title="实际步行距离 ÷ 直线距离：1.3 以内算顺路，2 以上说明绕了个街区">绕行系数<b id="tEx">–</b></div>
+    </div>
+    <div id="route"></div>
+    <div class="hotels" id="hotels" style="display:none"></div>
+    <div class="hint" id="hint">路径来自 OSRM 步行路网（WGS-84 已转成 GCJ-02，误差 &lt;1 m），按街道走，不是直线。全程步行——这条线本来就是一条街能走完的。</div>
+  </aside>
+  <div class="mapwrap">
+    <div id="map"></div>
+    <div class="legend"><i></i>步行（沿街道）<br><i style="border-top:2px dotted #8b91a1"></i>店门口→路口（几米）<br><i style="border-top:2px dashed #e8553d"></i>路网不可用·直线示意</div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function () {
+  var RAW = "__QUERY__" || "";
+  var q = new URLSearchParams(
+    (RAW && RAW.indexOf("=") > 0) ? RAW : (location.search || "").replace(/^\?/, ""));
+
+  function _list(s) { return (s || "").split(";").filter(function (x) { return x !== ""; }); }
+  function _clean(s) { return (s || "").replace(/[>）)。，、]+$/g, "").trim(); }
+
+  var pts = _list(q.get("p")).map(function (s) {
+    var a = s.split(",");
+    return { lng: parseFloat(a[0]), lat: parseFloat(a[1]) };
+  });
+  var names = _list(q.get("n")).map(_clean);
+
+  // k 兼容三种写法：`a,b`（新）/ `a:b`（旧）/ `a:b:w`（旧带模式，模式忽略——现在只有步行）
+  var ranges = _list(q.get("k")).map(function (s) {
+    var parts = s.split(/[,:]/);
+    var a = parseInt(parts[0], 10), b = parseInt(parts[1], 10);
+    return { a: a, b: b };
+  }).filter(function (r) { return isFinite(r.a) && isFinite(r.b); });
+
+  // lg：街道名，`~` 分隔（旧链接可能是 `~~` 或 `;`）
+  var lgRaw = q.get("lg") || "";
+  var lg = lgRaw.indexOf("~") >= 0 ? lgRaw.split("~")
+         : (lgRaw.indexOf(";") >= 0 ? lgRaw.split(";") : (lgRaw ? [lgRaw] : []));
+
+  var fd = _list(q.get("fd"));
+  var cu = _list(q.get("cu"));
+
+  // sn：站点原始坐标（POI 真实位置，可能落在建筑里，离马路几十米）
+  var snapPts = _list(q.get("sn")).map(function (s) {
+    var a = s.split(",");
+    return { lng: parseFloat(a[0]), lat: parseFloat(a[1]) };
+  });
+  // fb：每段「路网是否取到」，1 = 没取到（画虚线并标明是示意）
+  var fbRaw = q.get("fb") || "";
+  function noGeom(i) { return fbRaw.charAt(i) === "1"; }
+
+  // 站点坐标 = 段端点
+  var stopPt = [];
+  for (var i = 0; i < names.length; i++) {
+    if (i === 0 && ranges.length) stopPt.push(pts[ranges[0].a]);
+    else if (i > 0 && ranges[i - 1]) stopPt.push(pts[ranges[i - 1].b]);
+  }
+  if (stopPt.length && ranges.length) {
+    stopPt[stopPt.length - 1] = pts[ranges[ranges.length - 1].b];
+  }
+
+  // ——— 地图：只有红色步行线 ———
+  var map = L.map("map", { zoomControl: false, attributionControl: true,
+                           center: [30.2720, 120.1600], zoom: 14 });
+  L.control.zoom({ position: "bottomright" }).addTo(map);
+  L.tileLayer("https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}", {
+    subdomains: ["1", "2", "3", "4"], maxZoom: 19, minZoom: 10,
+    attribution: '&copy; <a href="https://www.amap.com/">高德地图</a>'
+  }).addTo(map);
+
+  var layer = L.featureGroup().addTo(map);
+  var RED = "#e8553d";
+
+  function slice(i) {
+    var r = ranges[i];
+    return pts.slice(r.a, r.b + 1).map(function (p) { return [p.lat, p.lng]; });
+  }
+
+  function fit() {
+    try {
+      var b = layer.getBounds();
+      if (b.isValid()) map.fitBounds(b, { padding: [46, 46], maxZoom: 17 });
+    } catch (e) {}
+  }
+
+  function draw() {
+    layer.clearLayers();
+    var prevEnd = null;
+    ranges.forEach(function (r, i) {
+      var line = slice(i);
+      if (line.length < 2) return;
+      // 兜底：万一相邻两段端点差得远（旧链接 / 老引擎产物），补一段短线，别留断口
+      if (prevEnd) {
+        var d = map.distance(prevEnd, line[0]);
+        if (d > 1) {
+          L.polyline([prevEnd, line[0]], { color: RED, weight: 4.5, opacity: 1, lineCap: "round" }).addTo(layer);
+        }
+      }
+      prevEnd = line[line.length - 1];
+      if (prevEnd) prevEnd = [prevEnd[0], prevEnd[1]];
+      var dash = noGeom(i) ? "6,6" : null;
+      L.polyline(line, { color: "#fff", weight: 9, opacity: dash ? 0.35 : 1,
+                         lineCap: "round", dashArray: dash }).addTo(layer);
+      L.polyline(line, { color: RED, weight: 4.5, opacity: dash ? 0.55 : 1,
+                         lineCap: "round", dashArray: dash }).addTo(layer);
+    });
+
+    // 接驳小段：站点真实坐标 → 路线端点（POI 在楼里，离马路几十米，画细虚线说清楚）
+    function stub(i) {
+      var sp = snapPts[i], r = ranges[i];
+      if (!sp || !r) return;
+      [[pts[r.a], sp], [pts[r.b], i + 1 < snapPts.length ? snapPts[i + 1] : null]]
+        .forEach(function (pair) {
+          var to = pair[1];
+          if (!to) return;
+          var d = map.distance([pair[0].lat, pair[0].lng], [to.lat, to.lng]);
+          if (d < 2 || d > 220) return;
+          L.polyline([[to.lat, to.lng], [pair[0].lat, pair[0].lng]], {
+            color: "#8b91a1", weight: 2, opacity: 0.85, dashArray: "2,4"
+          }).addTo(layer);
+        });
+    }
+    for (var si = 0; si < ranges.length; si++) stub(si);
+    stopPt.forEach(function (p, i) {
+      if (!p) return;
+      if (snapPts[i] && isFinite(snapPts[i].lat)) p = snapPts[i];   // 圆点放在 POI 真实位置
+      var nm = names[i] || "";
+      var shortNm = nm.length > 14 ? nm.slice(0, 13) + "…" : nm;
+      var mk = L.circleMarker([p.lat, p.lng], {
+        radius: 5, color: "#fff", weight: 2, fillColor: "#1b1d22", fillOpacity: 1
+      }).addTo(layer);
+      // 站点名常驻显示（和左栏编号对应）
+      // 密集区两个站挨得很近时，标签会叠在一起：按「上方/下方」交替错开
+      var prevP = i > 0 ? stopPt[i - 1] : null;
+      var close = prevP && map.distance([prevP.lat, prevP.lng], [p.lat, p.lng]) < 26;
+      var dir = close ? (i % 2 ? "bottom" : "top") : "auto";
+      var off = close ? [0, i % 2 ? -6 : 6] : [0, 0];
+      mk.bindTooltip((i + 1) + " " + shortNm, {
+        permanent: true, direction: dir, offset: off,
+        className: "stop-label", opacity: 1
+      });
+      mk.bindPopup('<b>' + (i + 1) + " " + nm + "</b><br/>" +
+        '<a target="_blank" rel="noopener" href="https://uri.amap.com/marker?position=' +
+        p.lng.toFixed(6) + "," + p.lat.toFixed(6) + '&name=' +
+        encodeURIComponent(nm) + '&callnative=1">在高德里打开</a>');
+    });
+    fit();
+  }
+
+  // ——— 左栏 ———
+  function fmtKm(m) { return m >= 1000 ? (m / 1000).toFixed(1) + " km" : Math.round(m) + " m"; }
+
+  function renderSide() {
+    var host = document.getElementById("route");
+    host.innerHTML = "";
+    var totMin = 0, totM = 0, totStraight = 0;
+
+    function twoLine(tag, arr, kind) {
+      var txt = (arr.length && arr[0] !== "—") ? arr.join("、") : ("本次没有检索到 " + kind);
+      return '<div class="row2"><span>' + tag + '</span> ' + txt + "</div>";
+    }
+
+    for (var i = 0; i < names.length; i++) {
+      var sp = document.createElement("div");
+      sp.className = "stop";
+      var food = (fd[i] || "—").split("¦").filter(Boolean);
+      var cult = (cu[i] || "—").split("¦").filter(Boolean);
+      sp.innerHTML = '<div class="idx">' + (i + 1) + "</div><h3 title=\"" + (names[i] || "") +
+        "\">" + (names[i] || "") + "</h3>" +
+        twoLine("🍜", food, "350 m 内的餐饮") + twoLine("🏛", cult, "800 m 内的文化点");
+      host.appendChild(sp);
+
+      if (i >= ranges.length) continue;
+      var line = slice(i);
+      var wm = 0;
+      for (var k = 1; k < line.length; k++) wm += map.distance(line[k - 1], line[k]);
+      var r = ranges[i];
+      var straight = 0;
+      if (pts[r.a] && pts[r.b]) {
+        straight = map.distance([pts[r.a].lat, pts[r.a].lng], [pts[r.b].lat, pts[r.b].lng]);
+      }
+      var mins = Math.max(1, Math.round(wm / 75));
+      totM += wm; totMin += mins; totStraight += straight;
+
+      var streets = lg[i] || "";
+      if (wm < 40) {
+        var w2 = document.createElement("div");
+        w2.className = "leg";
+        w2.innerHTML = '<div class="ln">🚶 <b>两站紧挨着，抬脚就到</b></div>';
+        host.appendChild(w2);
+        totM += wm; totStraight += straight;
+        continue;
+      }
+      var txt = "步行 " + fmtKm(wm) + " · " + mins + " 分钟";
+      if (streets) txt += " · 沿 " + streets;
+      var note = (straight > 0 && wm - straight >= 200 && wm >= straight * 1.5)
+        ? "（直线 " + fmtKm(straight) + "，绕行一个街区）" : "";
+
+      var wrap = document.createElement("div");
+      wrap.className = "leg";
+      wrap.innerHTML = '<div class="ln">🚶 <b>' + txt + "</b>" +
+                       (note ? ' <em>' + note + "</em>" : "") + "</div>";
+      host.appendChild(wrap);
+    }
+
+    document.getElementById("tMin").textContent = totMin ? totMin + " 分" : "–";
+    document.getElementById("tWalk").textContent = totM ? fmtKm(totM) : "0 m";
+    document.getElementById("tStops").textContent = names.length ? names.length + " 站" : "–";
+    var ex = totStraight > 0 ? (totM / totStraight) : 1;
+    document.getElementById("tEx").textContent = isFinite(ex) ? ex.toFixed(2) : "–";
+  }
+
+  document.getElementById("title").textContent = _clean(q.get("t") || "路线");
+  document.getElementById("sub").textContent =
+    names.length ? (names[0] + " 出发 · 共 " + names.length + " 站 · 全程步行") : "一条走完的街区路线";
+
+  var hs = [];
+  try { hs = JSON.parse(q.get("h") || "[]"); } catch (e) { hs = []; }
+  if (hs && hs.length) {
+    var box = document.getElementById("hotels");
+    box.style.display = "block";
+    box.innerHTML = "<h4>终点附近住宿（" + (hs[0].date || "") + " 入住）</h4>" +
+      hs.map(function (x) {
+        return '<a href="' + (x.bookUrl || "#") + '" target="_blank" rel="noopener">¥' +
+          (x.price || "–") + " " + (x.name || "") + " <em>" +
+          (x.distanceM ? "· " + x.distanceM + " m" : "") + "</em></a>";
+      }).join("");
+  }
+
+  if (!pts.length || !ranges.length) {
+    document.getElementById("route").innerHTML =
+      '<div style="color:#c0392b;font-size:12.5px">这个页面需要带参数，例如 map.html?p=120.16481,30.27420;120.16165,30.27116&amp;n=武林门码头;杭州剧院</div>';
+  } else {
+    draw();
+    renderSide();
+    setTimeout(function () { map.invalidateSize(); }, 120);
+    setTimeout(function () { map.invalidateSize(); fit(); }, 500);
+  }
+})();
+</script>
+</body>
+</html>
