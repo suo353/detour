@@ -1,4 +1,4 @@
-# 绕路 Detour · 拒绝榜单的城市长尾探索智能体
+# 绕路 Detour · 城市目的地探索智能体
 
 > 2026 飞猪 AI 旅行创新大赛参赛作品（赛题方向 8：目的地探索）
 > 在线地图页：**https://suo353.github.io/detour/map.html**
