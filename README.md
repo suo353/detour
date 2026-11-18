@@ -35,7 +35,7 @@
 ## 仓库结构
 
 ```
-detour-agent/            # 源码（本仓库根目录的 detour-agent-src.zip 解压后即为它）
+detour-agent/            # 源码（本仓库根目录的 detour-agent-src-lite.zip 解压后即为它）
 ├── explore.py           # 引擎：检索 / 打分 / 800m 聚类 / 剔榜 / 真实路网（单文件，零第三方依赖）
 ├── skill-package-engine/# 可直接打包成百炼技能包的目录（scripts/ + data/ + map.html + SKILL.md）
 │   ├── scripts/explore.py
@@ -49,6 +49,8 @@ detour-agent/            # 源码（本仓库根目录的 detour-agent-src.zip �
 ```
 
 `map.html`（本仓库根目录）是那条路线的离线展示页：URL 里带坐标，纯静态，无后端。
+
+`demo.html` 是演示视频播放页（引用 `releases/download/demo-v1/detour-demo-1080p.mp4`）；`img/` 下是四条线的路线截图。
 
 ---
 
