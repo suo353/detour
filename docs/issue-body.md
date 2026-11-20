@@ -70,6 +70,7 @@
 
 - 百炼能力 / 模型：Managed Agent（云端托管长程任务），模型 DeepSeek-V4.1-Flash-1017。
 - 调用方式：百炼控制台 → Managed Agent 智能体会话（agent_01M63PAJM4F40DRQVXNR58T3P3）；会话内由智能体调用 bash 工具执行技能包中的 scripts/explore.py。
+- 链路位置：**运行时链路**。评委在会话里提问的每一轮，都是智能体在沙箱中实时执行 explore.py 并调用飞猪、高德接口；开发期我们只用同一套代码建点库与跑回归，没有把数据处理预先写死在答案里。
 - 使用环节与输入输出：
 
 | 环节                    | 输入                                    | 输出                                               |
@@ -79,7 +80,8 @@
 | 周边与酒店              | 站点坐标                                | 每站的吃、看推荐，以及按方案各 2 家酒店            |
 | 成稿                    | 上述 JSON                               | 三条方案，每条一行「适合谁」，附路线图链接         |
 
-- Skill 名称：自建技能 detour-engine，当前版本 V8.1。随包内容包括 scripts/explore.py、data/themes（308 份城市与主题点库）、data/poi（232 份）、data/amenities（101 份城市吃喝与文保池）、data/snap（路网可达性网格）、map.html（离线地图页）、scripts/amap_key.txt 与 scripts/flyai_key.txt（内置 Key，会话零配置即可运行）。
+- Skill 名称：自建技能 detour-engine，当前版本 V8.2，引擎为单文件 explore.py，系统提示词为 v190。随包内容包括 scripts/explore.py、data/themes（308 份城市与主题点库）、data/poi（232 份）、data/amenities（101 份城市吃喝与文保池）、data/snap（路网可达性网格）、map.html（离线地图页）。
+- 凭据与脱敏：公开交付物（仓库与源码包）**不含任何 API Key**。引擎运行时读取环境变量 AMAP_KEY 与 FLYAI_API_KEY；两个变量都没有时会明确打印缺 Key 的提示，不会静默失败。线上演示用的 Key 由作者在百炼会话环境变量中私密注入，不随包、不入库。
 - MCP：Amap Maps 高德地图，官方 MCP，15 个接口全启用，用于地理编码、真实步行路径兜底、天气和周边补数。它不参与「发现或替换地点」，因为高德自带热门排序，与本产品的取点立场相反。
 - 其他工具与技术栈：
   - Python 3.11，沙箱内运行，零第三方依赖。
@@ -112,7 +114,8 @@
 
 - 仓库：[https://github.com/suo353/detour](https://github.com/suo353/detour)。其中 detour-agent-src-lite.zip 为源码包，含代码与文档，351 KB。约 3 MB 的数据点库未入库，可用 scripts/rebuild_theme_packs.py 重建。
 - 在线地图页，无需安装：[map.html](https://suo353.github.io/detour/map.html)
-- 智能体：百炼 → 智能体「绕路Detour-城市长尾探索」→ 发起会话。会话不需要填环境变量，Key 已内置。
+- 智能体：百炼 → 智能体「绕路Detour-城市长尾探索」→ 发起会话。该智能体为作者私有，可直接看演示视频与截图；如需自己部署，按上文 6 步新建智能体，并在会话环境变量里填入自己的 AMAP_KEY（高德 Web 服务 Key）与 FLYAI_API_KEY（飞猪 AI 开放平台 Key）。
+- 体验条件：飞猪首次登录赠送 5000 次调用、用完后每天 100 次；随包点库命中时，一次问答只需 0 至 2 次调用，冷门城市约 8 至 15 次。高德关键字与周边搜索共用一个每月 5000 次的免费额度，点库已随包，日常问答基本不消耗搜索额度；高德另需自备 Key 才能查地理编码与步行兜底。
 
 本地复现：
 
@@ -120,12 +123,16 @@
 # 1) 解压 detour-agent-src-lite.zip，安装飞猪 CLI
 npm i -g @fly-ai/flyai-cli --registry=https://registry.npmmirror.com
 
-# 2) 跑一条，Key 已在 skill-package-engine/scripts/*.txt 内
+# 2) 注入自己的 Key（公开交付物不含 Key；也可写进 skill-package-engine/scripts/amap_key.txt 与 flyai_key.txt）
+export AMAP_KEY=你的高德Web服务Key
+export FLYAI_API_KEY=你的飞猪Key
+
+# 3) 跑一条
 cd detour
 python3 explore.py --city 杭州 --theme 夜游 --hours 3 \
   --anchor 武林广场 --auto-order --brief
 
-# 3) 输出包含三条方案及其路线图 URL，点开即为该街区
+# 4) 输出包含三条方案及其路线图 URL，点开即为该街区
 
 ```
 
@@ -147,6 +154,7 @@ python3 explore.py --city 杭州 --theme 夜游 --hours 3 \
 8. 会话是快照。智能体、技能、提示词都在会话创建时固化，修改后不生效的错觉由此产生，因此验证时一律新建会话。
 9. 脏数据需要清理。主题点库曾混入「仓库」「公司」这类泛匹配结果，以及陵园、烈士墓一类不适合步行线的点位。现在有名字黑白名单，并做过一次全量清理，共剔除 336 条。
 10. 演示预算。飞猪每天 100 次调用，一次冷跑需要 4 至 12 次，热跑 0 至 2 次。因此演示路线先在本地跑好，录屏时只点链接。
+11. 凭据管理。早期版本为了演示方便，把 Key 写进技能包的 scripts/*.txt，并在测试报告里贴过明文。收到提醒后已做三件事：从公开交付物中删除全部 Key 与明文引用，改为环境变量注入；轮换已暴露的 Key；在 README 与本文档中补上自备配置说明。仓库历史里若仍能检索到旧串，旧 Key 已作废。
 
 ---
 
