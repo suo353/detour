@@ -35,12 +35,12 @@
 ## 仓库结构
 
 ```
-detour-agent/            # 源码（本仓库根目录的 detour-agent-src-lite.zip 解压后即为它）
+detour-agent/            # 源码（本仓库根目录的 detour-agent-src.zip 解压后即为它）
 ├── explore.py           # 引擎：检索 / 打分 / 800m 聚类 / 剔榜 / 真实路网（单文件，零第三方依赖）
 ├── skill-package-engine/# 可直接打包成百炼技能包的目录（scripts/ + data/ + map.html + SKILL.md）
 │   ├── scripts/explore.py
-│   ├── scripts/amap_key.txt      # 内置高德 Key（Web 服务）
-│   ├── scripts/flyai_key.txt     # 内置飞猪 Key
+│   ├── scripts/amap_key.txt      # 可选：本地放自己的高德 Key（Web 服务），勿提交
+│   ├── scripts/flyai_key.txt     # 可选：本地放自己的飞猪 Key，勿提交
 │   └── data/                     # themes 308 份 / poi 232 份 / amenities 101 份 / snap 路网网格
 ├── detour-engine-skill.zip       # 上面目录打好的技能包（直接上传百炼）
 ├── prompts/system-prompt.md      # 智能体系统提示词（==== 之间是正文）
@@ -49,8 +49,6 @@ detour-agent/            # 源码（本仓库根目录的 detour-agent-src-lite.
 ```
 
 `map.html`（本仓库根目录）是那条路线的离线展示页：URL 里带坐标，纯静态，无后端。
-
-`demo.html` 是演示视频播放页（引用 `releases/download/demo-v1/detour-demo-1080p.mp4`）；`img/` 下是四条线的路线截图。
 
 ---
 
@@ -63,7 +61,10 @@ unzip detour-agent-src-lite.zip && cd detour
 # 1) 装飞猪 CLI（国内走 npmmirror 更快）
 npm i -g @fly-ai/flyai-cli --registry=https://registry.npmmirror.com
 
-# 2) 跑一条（Key 已内置在 skill-package-engine/scripts/*.txt）
+# 2) 先注入自己的 Key（公开交付物不含任何 Key）
+export AMAP_KEY=你的高德Web服务Key
+export FLYAI_API_KEY=你的飞猪Key
+# 2) 跑一条
 python3 explore.py --city 杭州 --theme 夜游 --hours 3 \
   --anchor 武林广场 --auto-order --brief
 
@@ -87,7 +88,7 @@ python3 explore.py --city 杭州 --theme 夜游 --hours 3 \
 2. 把 `prompts/system-prompt.md` 里 `====` 之间的正文粘进系统提示词；
 3. 添加 MCP：**Amap Maps 高德地图**（15/15 接口）；
 4. 上传并添加技能：`detour-engine-skill.zip`（技能名 `detour-engine`）；
-5. 建会话（**环境变量留空**，Key 在技能包里）；
+5. 建会话（在会话环境变量里填 **AMAP_KEY** 与 **FLYAI_API_KEY**，或用密钥库）；
 6. 问「我在杭州武林广场，今晚 3 小时，想走夜游」。
 
 > 注意：改完提示词或换技能，**老会话仍绑旧快照**，必须新建会话才生效。
